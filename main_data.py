@@ -2,186 +2,109 @@ import streamlit as st
 import pandas as pd
 import pickle
 
+# Configure page to use full width
+st.set_page_config(
+    page_title="Data Dashboard",
+    page_icon="🔬",
+    layout="wide",  # This makes it use full width
+    initial_sidebar_state="collapsed"  # Hide sidebar for more space
+)
 
-
-# Initialize session state
+# Initialize session state for df
 if 'df' not in st.session_state:
     with open("data/main_data.pickle", "rb") as f:
         st.session_state.df = pickle.load(f)
 
-
-
-
-
-# Custom CSS for styling
-st.markdown("""
-<style>
-    .param-title {
-        font-weight: bold;
-        font-size: 16px;
-        color: #000000;
-        margin-bottom: 15px;
-    }
-    .sub-param-title {
-        font-weight: bold;
-        font-size: 16px;
-        color: #000000;
-        margin-bottom: 15px;
-    }
-    .param-section {
-        margin-bottom: 30px;
-    }
-    .horizontal-line {
-        border-top: 2px solid #e0e0e0;
-        margin: 25px 0;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
-
-total_main_weight = 0
-updated_weights = {}
-
-for param_name, param_data in st.session_state.hierarchical_weights.items():
-    # Create two columns for each parameter block - wider layout
-    left_col, uu, line_col, right_col = st.columns([1, 0.3, 0.1, 2])
-    
-    # Left column: Main parameter
-    with left_col:
-        st.markdown(f'<div class="param-title">{param_name}</div>', unsafe_allow_html=True)
-        
-        main_weight = st.number_input(
-            f"Weight % for {param_name}",
-            min_value=0.0,
-            max_value=100.0,
-            value=param_data['weight'],
-            step=0.1,
-            key=f"main_{param_name}",
-            label_visibility="collapsed"
-        )
-        
-        total_main_weight += main_weight
-
-    with line_col:
-        st.markdown("""
-        <div style="
-            border-left: 2px solid #e0e0e0;
-            height: 300px;
-            margin: 0 auto;
-        "></div>
-        """, unsafe_allow_html=True)
-    
-    # Right column: Sub-parameters for this main parameter
-    with right_col:
-        st.markdown(f'<div class="sub-param-title">Sub-parameters</div>', unsafe_allow_html=True)
-        
-        sub_weights = {}
-        total_sub_weight = 0
-        
-        for sub_param, sub_weight in param_data['sub_params'].items():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(f"• {sub_param}")
-            with col2:
-                weight = st.number_input(
-                    f"Sub-weight % for {sub_param}",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=float(sub_weight),
-                    step=0.1,
-                    key=f"sub_{param_name}_{sub_param}",
-                    label_visibility="collapsed"
-                )
-                sub_weights[sub_param] = weight
-                total_sub_weight += weight
-        
-        # Show sub-parameter total
-        if abs(total_sub_weight - 100.0) != 0:
-            st.warning(f"⚠️ Total: {total_sub_weight:.1f}% (should be 100%)")
-        else:
-            st.success(f"✅ Total: {total_sub_weight:.1f}%")
-        
-        updated_weights[param_name] = {
-            'weight': main_weight,
-            'sub_params': sub_weights
+# Initialize session state for hierarchical_weights if not exists
+if 'hierarchical_weights' not in st.session_state: 
+    st.session_state.hierarchical_weights = {
+        'Commercial Viability': {
+            'weight': 30.00,
+            'sub_params': {
+                'Prevalence and Incidence': 20,
+                'market size score': 20,
+                'Direct Competition Score': 50,
+                'Indirect Competition Score': 10
+            }
+        },
+        'Unmet Needs': {
+            'weight': 12.00,
+            'sub_params': {
+                'clinical burden score': 32.50,
+                'direct and indirect economical burden score': 62.50,
+                'mortality score': 5.00
+            }
+        },
+        'Target Company Characteristics': {
+            'weight': 4.00,
+            'sub_params': {
+                'Company Overall Score': 50,
+                'Geography Score': 50
+            }
+        },
+        'Clinical Characteristics': {
+            'weight': 7.00,
+            'sub_params': {
+                'Biological target score': 15.00,
+                'Treatment Type Score': 5.00,
+                'Development Phase Score': 40.00,
+                'Number of investigated Indications Score': 15.00,
+                'Therapeutic Area Score': 25.00
+            }
+        },
+        'Time to Market': {
+            'weight': 15.00,
+            'sub_params': {
+                'Regulatory Score': 15.00,
+                'CT Timeline Score': 85.00
+            }
+        },
+        'Clinical Development Feasibility': {
+            'weight': 12.00,
+            'sub_params': {
+                'PoC Score': 33.33,
+                'CT Enrollment Score': 33.33,
+                'CT Outlook Score': 33.34
+            }
+        },
+        'Internal Production Fit': {
+            'weight': 20.00,
+            'sub_params': {
+                'Molecule Type Score': 100
+            }
         }
-    
-    # Add horizontal line between parameters
-    st.markdown('<div class="horizontal-line"></div>', unsafe_allow_html=True)
+    }
 
+# Function to calculate effective weight for each column
+def get_effective_weight(column_name):
+    for param_name, param_data in st.session_state.hierarchical_weights.items():
+        if column_name in param_data['sub_params']:
+            param_weight = param_data['weight']
+            sub_weight = param_data['sub_params'][column_name]
+            effective_weight = (param_weight / 100) * (sub_weight / 100) * 100
+            return effective_weight
+    return None
 
-if abs(total_main_weight - 100.0) > 0:
-   st.error(f"**{total_main_weight:.1f}%**, main parameters should total 100%")
-else:
-   st.success(f"**{total_main_weight:.1f}%**, main parameters total is correct")
-st.markdown('<div class="horizontal-line"></div>', unsafe_allow_html=True)
+# Create a copy of the dataframe to modify column names
+df_display = st.session_state.df.copy()
 
-
-
-
-# Show weight summary table
-if st.expander("📋 Weight Summary", expanded=False):
-    summary_data = []
-    for param_name, param_data in updated_weights.items():
-        for sub_param, sub_weight in param_data['sub_params'].items():
-            effective_weight = (param_data['weight'] / 100) * (sub_weight / 100) * 100
-            summary_data.append({
-                'Parameter': param_name,
-                'Sub-parameter': sub_param,
-                'Parameter Weight %': f"{param_data['weight']:.1f}%",
-                'Sub-parameter Weight %': f"{sub_weight:.1f}%",
-                'Effective Weight %': f"{effective_weight:.2f}%"
-            })
-    
-    summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df, use_container_width=True, hide_index=True)
-
-
-
-
-# Only enable rerank if weights are valid
-weights_valid = abs(total_main_weight - 100.0) == 0
-all_sub_valid = all(abs(sum(data['sub_params'].values()) - 100.0) == 0 for data in updated_weights.values())
-
-
-if st.button("Rerank Data", use_container_width=True, disabled=not (weights_valid and all_sub_valid)):
-    if weights_valid and all_sub_valid:
-        # Save current weights
-        st.session_state.hierarchical_weights = updated_weights
-        
-        # Reload original data
-        with open("data/main_data.pickle", "rb") as f:
-            df = pickle.load(f)
-        
-        # Calculate hierarchical weighted score
-        df['Final Score'] = 0
-        
-        for param_name, param_data in updated_weights.items():
-            param_weight = param_data['weight'] / 100
-            
-            # Calculate weighted sub-parameter score for this parameter
-            param_score = 0
-            for sub_param, sub_weight in param_data['sub_params'].items():
-                if sub_param in df.columns:
-                    sub_weight_norm = sub_weight / 100
-                    # Only multiply if it's a numeric score column
-                    try:
-                        numeric_values = pd.to_numeric(df[sub_param], errors='coerce').fillna(0)
-                        param_score += numeric_values * sub_weight_norm
-                    except:
-                        # Skip non-numeric columns
-                        continue
-            
-            # Add this parameter's contribution to final score
-            df['Final Score'] += param_score * param_weight
-        
-        # Sort by final score descending
-        df = df.sort_values('Final Score', ascending=False)
-        
-        # Update session state
-        st.session_state.df = df
-        
-        st.success("Data reranked successfully with hierarchical weights")
+# Update column names to include weights in brackets
+new_column_names = {}
+for col in df_display.columns:
+    effective_weight = get_effective_weight(col)
+    if effective_weight is not None:
+        new_column_names[col] = f"{col} [{effective_weight:.2f}%]"
     else:
-        st.error("❌ Please ensure all weights total 100% before reranking")
+        new_column_names[col] = col
+
+
+# Rename columns
+df_display = df_display.rename(columns=new_column_names)
+
+# Reorder columns to put Final Score first if it exists
+if 'Final Score' in df_display.columns:
+    cols = ['Final Score'] + [col for col in df_display.columns if col != 'Final Score']
+    df_display = df_display[cols]
+
+# Display the dataframe with updated column names, hiding index
+st.dataframe(df_display, use_container_width=True, hide_index=True)
