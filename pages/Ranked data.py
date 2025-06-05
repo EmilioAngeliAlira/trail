@@ -91,8 +91,10 @@ df_to_display = df_to_display.rename(columns=new_column_names)
 
 # Reorder columns to put Final Score first if it exists
 if 'Final Score' in df_to_display.columns:
-    cols = ['Final Score'] + [col for col in df_to_display.columns if col != 'Final Score']
+    cols = ['Final Score'] + [col for col in df_to_display.columns if col !='Final Score']
     df_to_display = df_to_display[cols]
+
+df_to_display = df_to_display[[col for col in df_to_display.columns if  col != 'Highest Phase Completed 5yrs Ago']]
 
 # Display the dataframe with updated column names, hiding index
 st.dataframe(df_to_display, use_container_width=True, hide_index=True)
