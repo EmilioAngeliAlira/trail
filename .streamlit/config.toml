@@ -7,3 +7,10 @@ textColor = "#262730"
 [server]
 headless = true
 port = 8501
+# Increase message size limit to handle large datasets
+# Default is 200MB, setting to 300MB to handle your 226MB data
+maxMessageSize = 300
+# Also increase upload size limit for consistency
+maxUploadSize = 300
+# Enable compression to help with large data transfer
+enableWebsocketCompression = true
