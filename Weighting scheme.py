@@ -26,7 +26,7 @@ st.markdown("""
 
 # Set current df type to full by default
 if 'current_df' not in st.session_state:
-    st.session_state.current_df = 'full'
+    st.session_state.current_df = 'grouped'
 
 # Initialize ranking dictionaries
 if 'rankings' not in st.session_state:
@@ -118,18 +118,21 @@ for param_name, param_data in st.session_state.hierarchical_weights.items():
     # Left column: Main parameter
     with left_col:
         
-        main_weight = st.number_input(
-            f"Weight % for {param_name}",
-            min_value=0.0,
-            max_value=100.0,
-            value=param_data['weight'],
-            step=0.1,
-            key=f"main_{param_name}",
-            label_visibility="collapsed"
-        )
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"{param_name}")
+        with col2:
+            main_weight = st.number_input(
+                f"Weight % for {param_name}",
+                min_value=0.0,
+                max_value=100.0,
+                value=param_data['weight'],
+                step=0.1,
+                key=f"main_{param_name}",
+                label_visibility="collapsed"
+            )
         
         total_main_weight += main_weight
-
 
     
     # Right column: Sub-parameters for this main parameter
@@ -141,7 +144,7 @@ for param_name, param_data in st.session_state.hierarchical_weights.items():
         for sub_param, sub_weight in param_data['sub_params'].items():
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.markdown(f"• {sub_param}")
+                st.markdown(f"{sub_param}")
             with col2:
                 weight = st.number_input(
                     f"Sub-weight % for {sub_param}",
