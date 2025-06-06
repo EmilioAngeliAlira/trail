@@ -48,8 +48,8 @@ if 'hierarchical_weights' not in st.session_state:
             'weight': 30.00,
             'sub_params': {
                 'Prevalence Score': 10,
-                'Irevalence Score': 10,
-                'market size score': 20,
+                'Incidence Score': 10,
+                'Market Size Score': 20,
                 'Direct Competition Score': 50,
                 'Indirect Competition Score': 10
             }
@@ -57,44 +57,44 @@ if 'hierarchical_weights' not in st.session_state:
         'Unmet Needs': {
             'weight': 12.00,
             'sub_params': {
-                'clinical burden score': 32.50,
-                'direct and indirect economical burden score': 62.50,
-                'mortality score': 5.00
+                'Clinical Burden Score': 32.5,
+                'Direct And Indirect Economic Burden Score': 62.5,
+                'Mortality Score': 5
             }
         },
         'Target Company Characteristics': {
             'weight': 4.00,
             'sub_params': {
-                'Company Overall Score': 50,
+                'Company Score': 50,
                 'Geography Score': 50
             }
         },
         'Clinical Characteristics': {
             'weight': 7.00,
             'sub_params': {
-                'Biological target score': 15.00,
-                'Treatment Type Score': 5.00,
-                'Development Phase Score': 40.00,
-                'Number of investigated Indications Score': 15.00,
-                'Therapeutic Area Score': 25.00
+                'Biological Target Score': 15,
+                'Treatment Type Score': 15,
+                'Development Phase Score': 40,
+                'Number of investigated Indications Score': 15,
+                'Therapeutic Area Score': 15
             }
         },
         'Time to Market': {
             'weight': 15.00,
             'sub_params': {
-                'Regulatory Score': 15.00,
-                'CT Timeline Score': 85.00
+                'Regulatory Score': 15,
+                'CT Timeline Score': 85
             }
         },
         'Clinical Development Feasibility': {
             'weight': 12.00,
             'sub_params': {
-                'PoC Score': 33.33,
-                'CT Enrollment Score': 33.33,
-                'CT Outlook Score': 33.34
+                'PoC Score': 33.4,
+                'CT Enrollment Score': 33.3,
+                'CT Outlook Score': 33.3
             }
         },
-        'Internal Production Fit': {
+        'Molecule Type': {
             'weight': 20.00,
             'sub_params': {
                 'Molecule Type Score': 100
@@ -159,7 +159,7 @@ for param_name, param_data in st.session_state.hierarchical_weights.items():
                 total_sub_weight += weight
         
         # Show sub-parameter total
-        if abs(total_sub_weight - 100.0) != 0:
+        if abs(total_sub_weight - 100.0) > 0.1:
             st.warning(f"⚠️ Total: {total_sub_weight:.1f}% (should be 100%)")
         else:
             st.success(f"✅ Total: {total_sub_weight:.1f}%")
@@ -214,23 +214,19 @@ if st.button("Rerank Data", use_container_width=True, disabled=not (weights_vali
         for dataset_type in ['full', 'grouped']:
             df = load_dataset(dataset_type)
             
-            # Calculate hierarchical weighted score
-            df['Final Score'] = 0
+            # Convert score columns to numeric
+            score_cols = [col for param_data in updated_weights.values() for col in param_data['sub_params'].keys()]
+            for col in score_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(pd.to_numeric(df[col], errors='coerce').mean())
             
-            for param_name, param_data in updated_weights.items():
-                param_weight = param_data['weight'] / 100
-                
-                param_score = 0
-                for sub_param, sub_weight in param_data['sub_params'].items():
-                    if sub_param in df.columns:
-                        sub_weight_norm = sub_weight / 100
-                        try:
-                            numeric_values = pd.to_numeric(df[sub_param], errors='coerce').fillna(0)
-                            param_score += numeric_values * sub_weight_norm
-                        except:
-                            continue
-                
-                df['Final Score'] += param_score * param_weight
+            # Calculate final score using the same logic as your function
+            df['Final Score'] = sum(
+                (param_data['weight'] / 100) * sum(
+                    df[col] * (sub_weight / 100) for col, sub_weight in param_data['sub_params'].items() 
+                    if col in df.columns
+                ) for param_data in updated_weights.values()
+            )
             
             # Store ranking dictionary (index -> Final Score)
             st.session_state.rankings[dataset_type] = df['Final Score'].to_dict()
