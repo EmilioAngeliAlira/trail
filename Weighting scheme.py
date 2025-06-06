@@ -40,12 +40,6 @@ def load_dataset(dataset_type):
 
 st.session_state.df = load_dataset(st.session_state.current_df)
 
-if st.session_state.current_df == 'full':
-    if ('filter_rare_only' in st.session_state and st.session_state.filter_rare_only):
-        st.session_state.df = st.session_state.df[st.session_state.df['Prevalence Classification'].isin(['ULTRA RARE', 'RARE'])]
-    if ('filter_company_size' in st.session_state and st.session_state.filter_company_size):
-        st.session_state.df = st.session_state.df[st.session_state.df['Company Size Classification'].isin(['Medium', 'Small'])]
-
 
 # Initialize session state for hierarchical_weights if not exists
 if 'hierarchical_weights' not in st.session_state: 
@@ -175,28 +169,22 @@ for param_name, param_data in st.session_state.hierarchical_weights.items():
         }
 
     
-    # Add filter toggles (always show, but only apply to full dataset)
-    with rightright_col:
-        if param_name == "Commercial Viability":
-            if 'filter_rare_only' not in st.session_state:
-                st.session_state.filter_rare_only = False
+        # Add filter toggles (always show, but only apply to full dataset)
+        with rightright_col:
+            if param_name == "Commercial Viability":
+                if 'filter_rare_only' not in st.session_state:
+                    st.session_state.filter_rare_only = False
+                st.session_state.filter_rare_only = st.toggle("Only rare and ultra-rare", value=st.session_state.filter_rare_only, key="rare_filter_toggle")
+                    
+            elif param_name == "Target Company Characteristics":
+                if 'filter_company_size' not in st.session_state:
+                    st.session_state.filter_company_size = False
+                st.session_state.filter_company_size = st.toggle("Only medium and small companies", value=st.session_state.filter_company_size, key="company_filter_toggle")
             
-            st.session_state.filter_rare_only = st.toggle(
-                "Only rare and ultra-rare",
-                value=st.session_state.filter_rare_only,
-                key="rare_filter_toggle"
-            )
-        
-        elif param_name == "Target Company Characteristics":
-            if 'filter_company_size' not in st.session_state:
-                st.session_state.filter_company_size = False
-            
-            st.session_state.filter_company_size = st.toggle(
-                "Only Medium/Small companies",
-                value=st.session_state.filter_company_size,
-                key="company_filter_toggle"
-            )
-    
+            elif param_name == "Time to Market":
+                if 'filter_trial_status' not in st.session_state:
+                    st.session_state.filter_trial_status = False
+                st.session_state.filter_trial_status = st.toggle("Only completed", value=st.session_state.filter_trial_status, key="trial_status_toggle")
 
 
 if abs(total_main_weight - 100.0) > 0:
@@ -246,10 +234,13 @@ if st.button("Apply the weights and filters", use_container_width=True, disabled
                 # Apply rare filter
                 if ('filter_rare_only' in st.session_state and st.session_state.filter_rare_only):
                     df = df[df['Prevalence Classification'].isin(['ULTRA RARE', 'RARE'])]
-                
                 # Apply company size filter
                 if ('filter_company_size' in st.session_state and st.session_state.filter_company_size):
                     df = df[df['Company Size Classification'].isin(['Medium', 'Small'])]
+                # Apply trial status filter
+                if ('filter_trial_status' in st.session_state and st.session_state.filter_trial_status):
+                    df = df[df['Trial Status'] == 'Completed']
+                # Rest of the existing rerank logic continues here...
             
             # Rest of the existing rerank logic continues here...
             
@@ -279,5 +270,6 @@ if st.button("Apply the weights and filters", use_container_width=True, disabled
         
         st.session_state.df['FINAL SCORE'] = st.session_state.df.index.map(current_rankings).fillna(0)
         st.session_state.df = st.session_state.df.sort_values('FINAL SCORE', ascending=False)
-        
+
+                
         st.success("Weights and filters applied")
