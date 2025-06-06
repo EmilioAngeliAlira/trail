@@ -9,8 +9,6 @@ st.set_page_config(
     layout="wide",  # This makes it use full width
 )
 
-
-
 # Initialize session state for hierarchical_weights if not exists
 if 'hierarchical_weights' not in st.session_state: 
     st.session_state.hierarchical_weights = {
@@ -72,9 +70,6 @@ if 'hierarchical_weights' not in st.session_state:
         }
     }
 
-
-
-
 # Function to load dataset
 def load_dataset(dataset_type):
     filename = "data/dashboard_data_full.pickle" if dataset_type == 'full' else "data/dashboard_data_grouped.pickle"
@@ -87,8 +82,6 @@ if 'current_df' not in st.session_state:
 
 if 'rankings' not in st.session_state:
     st.session_state.rankings = {'full': {}, 'grouped': {}}
-
-# hierarchical_weights are already initialized in the weighting scheme page
 
 # Toggle for dataset selection
 show_all_data = st.sidebar.toggle(
@@ -104,14 +97,23 @@ new_df_type = 'full' if show_all_data else 'grouped'
 if st.session_state.current_df != new_df_type or 'df' not in st.session_state:
     st.session_state.current_df = new_df_type
     
-    # Load fresh dataset
-    st.session_state.df = load_dataset(st.session_state.current_df)
-    
-    # Apply ranking if exists
-    current_rankings = st.session_state.rankings.get(st.session_state.current_df, {})
-    if current_rankings:
-        st.session_state.df['FINAL SCORE'] = st.session_state.df.index.map(current_rankings).fillna(0)
-        st.session_state.df = st.session_state.df.sort_values('FINAL SCORE', ascending=False)
+# Always load fresh dataset and apply filters
+st.session_state.df = load_dataset(st.session_state.current_df)
+
+# Apply filters if enabled and using full dataset
+if st.session_state.current_df == 'full':
+    if ('filter_rare_only' in st.session_state and st.session_state.filter_rare_only):
+        st.session_state.df = st.session_state.df[st.session_state.df['Prevalence Classification'].isin(['ULTRA RARE', 'RARE'])]
+    if ('filter_company_size' in st.session_state and st.session_state.filter_company_size):
+        st.session_state.df = st.session_state.df[st.session_state.df['Company Size Classification'].isin(['Medium', 'Small'])]
+    if ('filter_trial_status' in st.session_state and st.session_state.filter_trial_status):
+        st.session_state.df = st.session_state.df[st.session_state.df['Trial Status'] == 'Completed']
+
+# Apply ranking if exists
+current_rankings = st.session_state.rankings.get(st.session_state.current_df, {})
+if current_rankings:
+    st.session_state.df['FINAL SCORE'] = st.session_state.df.index.map(current_rankings).fillna(0)
+    st.session_state.df = st.session_state.df.sort_values('FINAL SCORE', ascending=False)
 
 # Toggle filter for old phases
 filter_old_phases = st.sidebar.toggle(
