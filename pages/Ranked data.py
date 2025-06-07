@@ -166,7 +166,3 @@ df_to_display = df_to_display[[col for col in df_to_display.columns if col != 'H
 # Display the dataframe with updated column names, hiding index
 st.dataframe(df_to_display, use_container_width=True, hide_index=True)
 
-df_to_display = df_to_display[[col for col in df_to_display.columns if  col != 'Highest Phase Completed 5yrs Ago']]
-
-# Display the dataframe with updated column names, hiding index
-st.dataframe(df_to_display, use_container_width=True, hide_index=True)
