@@ -345,7 +345,7 @@ st.sidebar.markdown("---")
 try:
     # Try to load and display the Alvotech logo
     import os
-    logo_path = r"C:\Users\EmilioAngeli\OneDrive - Alira Health\Documents\Alvotech\PowerBI\app\data"
+    logo_path = "data"
     
     # Look for common logo file extensions
     logo_files = []
