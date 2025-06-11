@@ -4,10 +4,34 @@ import pickle
 
 # Configure page to use full width
 st.set_page_config(
-    page_title="Ranked data",
+    page_title="Weighting scheme",
     page_icon="🔬",
     layout="wide",  # This makes it use full width
 )
+
+# Add this after your imports and before the page config
+st.markdown("""
+<style>
+.horizontal-line {
+    border-top: 1px solid #e0e0e0;
+    margin: 20px 0;
+    width: 100%;
+}
+
+.css-1d391kg {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.sidebar-logo {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+    text-align: center;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Function to load both datasets at startup
 @st.cache_data
@@ -18,6 +42,31 @@ def load_both_datasets():
     with open("data/dashboard_data_grouped.pickle", "rb") as f:
         df_grouped = pickle.load(f)
     return df_full, df_grouped
+
+# Function to load subparameter explanations
+@st.cache_data
+def load_subparameter_explanations():
+    """Load subparameter explanations from pickle file"""
+    with open("data/subparameter_explanations.pickle", "rb") as f:
+        return pickle.load(f)
+
+# Load both datasets at startup
+if 'df_full_original' not in st.session_state or 'df_grouped_original' not in st.session_state:
+    st.session_state.df_full_original, st.session_state.df_grouped_original = load_both_datasets()
+
+# Set current df type to grouped by default
+if 'current_df' not in st.session_state:
+    st.session_state.current_df = 'grouped'
+
+# Initialize ranking dictionaries
+if 'rankings' not in st.session_state:
+    st.session_state.rankings = {'full': {}, 'grouped': {}}
+
+# Initialize processed dataframes if they don't exist
+if 'df_full_processed' not in st.session_state:
+    st.session_state.df_full_processed = st.session_state.df_full_original.copy()
+if 'df_grouped_processed' not in st.session_state:
+    st.session_state.df_grouped_processed = st.session_state.df_grouped_original.copy()
 
 # Function to load hierarchical weights
 @st.cache_data
@@ -30,230 +79,183 @@ def load_hierarchical_weights():
 if 'hierarchical_weights' not in st.session_state:
     st.session_state.hierarchical_weights = load_hierarchical_weights()
 
-# Load both datasets at startup
-if 'df_full_original' not in st.session_state or 'df_grouped_original' not in st.session_state:
-    st.session_state.df_full_original, st.session_state.df_grouped_original = load_both_datasets()
+# Load subparameter explanations from pickle file
+if 'subparameter_explanations' not in st.session_state:
+    st.session_state.subparameter_explanations = load_subparameter_explanations()
 
-# Initialize session state
-if 'current_df' not in st.session_state:
-    st.session_state.current_df = 'full'
+def get_subparameter_explanation(sub_param):
+    """Return explanation for subparameter from loaded pickle data"""
+    return st.session_state.subparameter_explanations.get(sub_param, "")
 
-if 'rankings' not in st.session_state:
-    st.session_state.rankings = {'full': {}, 'grouped': {}}
+total_main_weight = 0
+updated_weights = {}
 
-# Initialize processed dataframes if they don't exist
-if 'df_full_processed' not in st.session_state:
-    st.session_state.df_full_processed = st.session_state.df_full_original.copy()
-if 'df_grouped_processed' not in st.session_state:
-    st.session_state.df_grouped_processed = st.session_state.df_grouped_original.copy()
-
-def apply_filters_and_weights(df_full, df_grouped, weights, filters):
-    """Apply filters and weights to both dataframes"""
+for param_name, param_data in st.session_state.hierarchical_weights.items():
+    # Create two columns for each parameter block - wider layout
+    left_col, uu, right_col = st.columns([1,0.5, 1])
     
-    # Apply filters to full dataset
-    df_full_filtered = df_full.copy()
-    
-    if filters.get('filter_rare_only', False):
-        if 'Prevalence Classification' in df_full_filtered.columns:
-            df_full_filtered = df_full_filtered[df_full_filtered['Prevalence Classification'].isin(['ULTRA RARE', 'RARE'])]
-    
-    if filters.get('filter_company_size', False):
-        if 'Company Size Classification' in df_full_filtered.columns:
-            df_full_filtered = df_full_filtered[df_full_filtered['Company Size Classification'].isin(['Medium', 'Small'])]
-    
-    if filters.get('filter_innovative_only', False):
-        if 'Biological Target Score' in df_full_filtered.columns:
-            df_full_filtered = df_full_filtered[df_full_filtered['Biological Target Score'] == 3]
-    
-    # Apply filters to grouped dataset
-    df_grouped_filtered = df_grouped.copy()
-    
-    if filters.get('filter_rare_only', False):
-        if 'Has at least one rare or ultrarare' in df_grouped_filtered.columns:
-            df_grouped_filtered = df_grouped_filtered[df_grouped_filtered['Has at least one rare or ultrarare'] == True]
-    
-    if filters.get('filter_company_size', False):
-        if 'Company Size Classification' in df_grouped_filtered.columns:
-            df_grouped_filtered = df_grouped_filtered[df_grouped_filtered['Company Size Classification'].isin(['Medium', 'Small'])]
-    
-    if filters.get('filter_innovative_only', False):
-        if 'Biological Target Score' in df_grouped_filtered.columns:
-            df_grouped_filtered = df_grouped_filtered[df_grouped_filtered['Biological Target Score'] == 3]
-    
-    # Apply weights to both datasets
-    for dataset_name, df in [('full', df_full_filtered), ('grouped', df_grouped_filtered)]:
-        # Convert score columns to numeric
-        score_cols = [col for param_data in weights.values() for col in param_data['sub_params'].keys()]
-        for col in score_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(pd.to_numeric(df[col], errors='coerce').mean())
+    st.markdown('<div class="horizontal-line"></div>', unsafe_allow_html=True)
+    # Left column: Main parameter
+    with left_col:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"{param_name}")
+        with col2:
+            main_weight = st.number_input(
+                f"Weight % for {param_name}",
+                min_value=0.0,
+                max_value=100.0,
+                value=param_data['weight'],
+                step=0.1,
+                key=f"main_{param_name}",
+                label_visibility="collapsed"
+            )
         
-        # Calculate final score
-        df['FINAL SCORE'] = sum(
-            (param_data['weight'] / 100) * sum(
-                df[col] * (sub_weight / 100) for col, sub_weight in param_data['sub_params'].items() 
-                if col in df.columns
-            ) for param_data in weights.values()
+        total_main_weight += main_weight
+
+    with right_col:
+        sub_weights = {}
+        total_sub_weight = 0
+        
+        for sub_param, sub_weight in param_data['sub_params'].items():
+            col1, col2, col3 = st.columns([3, 1, 0.3])
+            with col1:
+                st.markdown(f"{sub_param}")
+            with col2:
+                weight = st.number_input(
+                    f"Sub-weight % for {sub_param}",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=float(sub_weight),
+                    step=0.1,
+                    key=f"sub_{param_name}_{sub_param}",
+                    label_visibility="collapsed"
+                )
+                sub_weights[sub_param] = weight
+                total_sub_weight += weight
+            with col3:
+                # Add explanation popover for each subparameter
+                explanation = get_subparameter_explanation(sub_param)
+                if explanation:
+                    with st.popover("ℹ️", help="Click for explanation"):
+                        st.markdown(f"**{sub_param}**")
+                        st.markdown(explanation)
+        
+        # Show sub-parameter total
+        if abs(total_sub_weight - 100.0) > 0.1:
+            st.warning(f"Total: {total_sub_weight:.1f}% (should be 100%)")
+        else:
+            st.success(f"Total: {total_sub_weight:.1f}%")
+        
+        updated_weights[param_name] = {
+            'weight': main_weight,
+            'sub_params': sub_weights
+        }
+
+if abs(total_main_weight - 100.0) > 0:
+   st.error(f"**{total_main_weight:.1f}%**, main parameters should total 100%")
+else:
+   st.success(f"**{total_main_weight:.1f}%**, main parameters total is correct")
+st.markdown('<div class="horizontal-line"></div>', unsafe_allow_html=True)
+
+# Show weight summary table
+if st.expander("📋 Weight Summary", expanded=False):
+    summary_data = []
+    for param_name, param_data in updated_weights.items():
+        for sub_param, sub_weight in param_data['sub_params'].items():
+            effective_weight = (param_data['weight'] / 100) * (sub_weight / 100) * 100
+            summary_data.append({
+                'Parameter': param_name,
+                'Sub-parameter': sub_param,
+                'Parameter Weight %': f"{param_data['weight']:.1f}%",
+                'Sub-parameter Weight %': f"{sub_weight:.1f}%",
+                'Effective Weight %': f"{effective_weight:.2f}%"
+            })
+    
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+
+# Only enable apply button if weights are valid
+weights_valid = abs(total_main_weight - 100.0) == 0
+all_sub_valid = all(abs(sum(data['sub_params'].values()) - 100.0) == 0 for data in updated_weights.values())
+
+if st.button("Apply the weights", use_container_width=True, disabled=not (weights_valid and all_sub_valid)):
+    if weights_valid and all_sub_valid:
+        # Save current weights to session state
+        st.session_state.hierarchical_weights = updated_weights
+        
+        # Get current filter states from session state (set by the ranked data page)
+        filters = {
+            'filter_rare_only': st.session_state.get('filter_rare_only', False),
+            'filter_company_size': st.session_state.get('filter_company_size', False),
+            'filter_innovative_only': st.session_state.get('filter_innovative_only', False)
+        }
+        
+        # Apply filters and weights function
+        def apply_filters_and_weights(df_full, df_grouped, weights, filters):
+            """Apply filters and weights to both dataframes"""
+            
+            # Apply filters to full dataset
+            df_full_filtered = df_full.copy()
+            
+            if filters.get('filter_rare_only', False):
+                if 'Prevalence Classification' in df_full_filtered.columns:
+                    df_full_filtered = df_full_filtered[df_full_filtered['Prevalence Classification'].isin(['ULTRA RARE', 'RARE'])]
+            
+            if filters.get('filter_company_size', False):
+                if 'Company Size Classification' in df_full_filtered.columns:
+                    df_full_filtered = df_full_filtered[df_full_filtered['Company Size Classification'].isin(['Medium', 'Small'])]
+            
+            if filters.get('filter_innovative_only', False):
+                if 'Biological Target Score' in df_full_filtered.columns:
+                    df_full_filtered = df_full_filtered[df_full_filtered['Biological Target Score'] == 3]
+            
+            # Apply filters to grouped dataset
+            df_grouped_filtered = df_grouped.copy()
+            
+            if filters.get('filter_rare_only', False):
+                if 'Has at least one rare or ultrarare' in df_grouped_filtered.columns:
+                    df_grouped_filtered = df_grouped_filtered[df_grouped_filtered['Has at least one rare or ultrarare'] == True]
+            
+            if filters.get('filter_company_size', False):
+                if 'Company Size Classification' in df_grouped_filtered.columns:
+                    df_grouped_filtered = df_grouped_filtered[df_grouped_filtered['Company Size Classification'].isin(['Medium', 'Small'])]
+            
+            if filters.get('filter_innovative_only', False):
+                if 'Biological Target Score' in df_grouped_filtered.columns:
+                    df_grouped_filtered = df_grouped_filtered[df_grouped_filtered['Biological Target Score'] == 3]
+            
+            # Apply weights to both datasets
+            for dataset_name, df in [('full', df_full_filtered), ('grouped', df_grouped_filtered)]:
+                # Convert score columns to numeric
+                score_cols = [col for param_data in weights.values() for col in param_data['sub_params'].keys()]
+                for col in score_cols:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(pd.to_numeric(df[col], errors='coerce').mean())
+                
+                # Calculate final score
+                df['FINAL SCORE'] = sum(
+                    (param_data['weight'] / 100) * sum(
+                        df[col] * (sub_weight / 100) for col, sub_weight in param_data['sub_params'].items() 
+                        if col in df.columns
+                    ) for param_data in weights.values()
+                )
+                
+                # Store ranking dictionary (index -> Final Score)
+                st.session_state.rankings[dataset_name] = df['FINAL SCORE'].to_dict()
+            
+            return df_full_filtered, df_grouped_filtered
+        
+        # Apply filters and weights to both datasets
+        df_full_processed, df_grouped_processed = apply_filters_and_weights(
+            st.session_state.df_full_original, 
+            st.session_state.df_grouped_original, 
+            updated_weights, 
+            filters
         )
         
-        # Store ranking dictionary (index -> Final Score)
-        st.session_state.rankings[dataset_name] = df['FINAL SCORE'].to_dict()
-    
-    return df_full_filtered, df_grouped_filtered
-
-def apply_text_search(df, search_term):
-    """Apply text search across all string columns in the dataframe"""
-    if not search_term:
-        return df
-    
-    # Get all string/object columns
-    string_columns = df.select_dtypes(include=['object']).columns
-    
-    # Create a mask for rows that contain the search term in any string column
-    mask = pd.Series([False] * len(df), index=df.index)
-    
-    for col in string_columns:
-        # Convert to string and search (case-insensitive)
-        mask |= df[col].astype(str).str.contains(search_term, case=False, na=False)
-    
-    return df[mask]
-
-# SIDEBAR CONTROLS
-st.sidebar.caption("**Dataset view and filters**")
-# Toggle for dataset selection
-show_all_data = st.sidebar.toggle(
-    "Show all data", 
-    value=st.session_state.current_df == 'full',
-    help="Toggle between full dataset and grouped dataset"
-)
-
-# Update current_df based on toggle
-st.session_state.current_df = 'full' if show_all_data else 'grouped'
-
-# Initialize and display filters
-if 'filter_rare_only' not in st.session_state:
-    st.session_state.filter_rare_only = False
-filter_rare_only = st.sidebar.toggle("Only rare and ultra-rare", value=st.session_state.filter_rare_only, key="rare_filter_toggle")
-
-if 'filter_company_size' not in st.session_state:
-    st.session_state.filter_company_size = False
-filter_company_size = st.sidebar.toggle("Only medium and small companies", value=st.session_state.filter_company_size, key="company_filter_toggle")
-
-if 'filter_innovative_only' not in st.session_state:
-    st.session_state.filter_innovative_only = False
-filter_innovative_only = st.sidebar.toggle("Only innovative", value=st.session_state.filter_innovative_only, key="innovative_filter_toggle")
-
-# Check if any filter has changed and apply filters automatically
-filters_changed = (
-    filter_rare_only != st.session_state.get('filter_rare_only', False) or
-    filter_company_size != st.session_state.get('filter_company_size', False) or
-    filter_innovative_only != st.session_state.get('filter_innovative_only', False)
-)
-
-if filters_changed:
-    # Update session state
-    st.session_state.filter_rare_only = filter_rare_only
-    st.session_state.filter_company_size = filter_company_size
-    st.session_state.filter_innovative_only = filter_innovative_only
-    
-    # Prepare filter dictionary
-    filters = {
-        'filter_rare_only': filter_rare_only,
-        'filter_company_size': filter_company_size,
-        'filter_innovative_only': filter_innovative_only
-    }
-    
-    # Apply filters and weights to both datasets
-    df_full_processed, df_grouped_processed = apply_filters_and_weights(
-        st.session_state.df_full_original, 
-        st.session_state.df_grouped_original, 
-        st.session_state.hierarchical_weights, 
-        filters
-    )
-    
-    # Store processed dataframes
-    st.session_state.df_full_processed = df_full_processed.sort_values('FINAL SCORE', ascending=False)
-    st.session_state.df_grouped_processed = df_grouped_processed.sort_values('FINAL SCORE', ascending=False)
-
-# Toggle filter for old phases
-filter_old_phases = st.sidebar.toggle(
-    "Hide phases completed 5+ years ago", 
-    value=False,
-)
-
-# Text search functionality
-st.sidebar.markdown("---")
-st.sidebar.caption("**Text Search**")
-search_text = st.sidebar.text_input("Input some text to filter data:", placeholder=" ")
-
-# Initialize search state
-if 'current_search' not in st.session_state:
-    st.session_state.current_search = ""
-
-# Update search term automatically when it changes
-st.session_state.current_search = search_text
-
-# Get the current processed dataframe
-if st.session_state.current_df == 'full':
-    current_df = st.session_state.df_full_processed.copy()
-else:
-    current_df = st.session_state.df_grouped_processed.copy()
-
-# Apply ranking if exists
-current_rankings = st.session_state.rankings.get(st.session_state.current_df, {})
-if current_rankings:
-    current_df['FINAL SCORE'] = current_df.index.map(current_rankings).fillna(0)
-    current_df = current_df.sort_values('FINAL SCORE', ascending=False)
-
-# Apply text search filter
-if st.session_state.current_search:
-    current_df = apply_text_search(current_df, st.session_state.current_search)
-
-# Function to calculate effective weight for each column
-def get_effective_weight(column_name):
-    for param_name, param_data in st.session_state.hierarchical_weights.items():
-        if column_name in param_data['sub_params']:
-            param_weight = param_data['weight']
-            sub_weight = param_data['sub_params'][column_name]
-            effective_weight = (param_weight / 100) * (sub_weight / 100) * 100
-            return effective_weight
-    return None
-
-# Apply filter to dataframe if toggle is on
-if filter_old_phases and 'Highest Phase Completed 5yrs Ago' in current_df.columns:
-    df_to_display = current_df[current_df['Highest Phase Completed 5yrs Ago'] == False].copy()
-else:
-    df_to_display = current_df.copy()
-
-# Show entry count and search info with horizontal line
-st.sidebar.markdown("---")
-if st.session_state.current_search:
-    st.sidebar.caption(f"Showing {len(df_to_display)} entries (filtered by: '{st.session_state.current_search}')")
-else:
-    st.sidebar.caption(f"Showing {len(df_to_display)} entries")
-
-# Update column names to include weights in brackets
-new_column_names = {}
-for col in df_to_display.columns:
-    effective_weight = get_effective_weight(col)
-    if effective_weight is not None:
-        new_column_names[col] = f"{col} [{effective_weight:.2f}%]"
-    else:
-        new_column_names[col] = col
-
-# Rename columns
-df_to_display = df_to_display.rename(columns=new_column_names)
-
-# Reorder columns to put Final Score first if it exists
-if 'FINAL SCORE' in df_to_display.columns:
-    cols = ['FINAL SCORE'] + [col for col in df_to_display.columns if col != 'FINAL SCORE']
-    df_to_display = df_to_display[cols]
-
-# Remove the 'Highest Phase Completed 5yrs Ago' column from display
-df_to_display = df_to_display[[col for col in df_to_display.columns if col not in ['Highest Phase Completed 5yrs Ago','Has at least one rare or ultrarare']]]
-
-# Display the dataframe only if it's not empty
-if len(df_to_display) > 0:
-    st.dataframe(df_to_display, use_container_width=True, hide_index=True)
-else:
-    st.info("🔍 No entries match the current filters and search criteria. Try adjusting your filters or search term to see results.")
+        # Store processed dataframes
+        st.session_state.df_full_processed = df_full_processed.sort_values('FINAL SCORE', ascending=False)
+        st.session_state.df_grouped_processed = df_grouped_processed.sort_values('FINAL SCORE', ascending=False)
+        
+        st.success("The dataset has been reranked!")
