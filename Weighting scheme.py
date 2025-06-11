@@ -17,6 +17,19 @@ st.markdown("""
     margin: 20px 0;
     width: 100%;
 }
+
+.css-1d391kg {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.sidebar-logo {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+    text-align: center;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -30,11 +43,11 @@ def load_both_datasets():
         df_grouped = pickle.load(f)
     return df_full, df_grouped
 
-# Function to load hierarchical weights
+# Function to load subparameter explanations
 @st.cache_data
-def load_hierarchical_weights():
-    """Load hierarchical weights from pickle file"""
-    with open("data/hierarchical_weights.pickle", "rb") as f:
+def load_subparameter_explanations():
+    """Load subparameter explanations from pickle file"""
+    with open("data/subparameter_explanations.pickle", "rb") as f:
         return pickle.load(f)
 
 # Load both datasets at startup
@@ -55,9 +68,24 @@ if 'df_full_processed' not in st.session_state:
 if 'df_grouped_processed' not in st.session_state:
     st.session_state.df_grouped_processed = st.session_state.df_grouped_original.copy()
 
+# Function to load hierarchical weights
+@st.cache_data
+def load_hierarchical_weights():
+    """Load hierarchical weights from pickle file"""
+    with open("data/hierarchical_weights.pickle", "rb") as f:
+        return pickle.load(f)
+
 # Load hierarchical weights from pickle file
 if 'hierarchical_weights' not in st.session_state:
     st.session_state.hierarchical_weights = load_hierarchical_weights()
+
+# Load subparameter explanations from pickle file
+if 'subparameter_explanations' not in st.session_state:
+    st.session_state.subparameter_explanations = load_subparameter_explanations()
+
+def get_subparameter_explanation(sub_param):
+    """Return explanation for subparameter from loaded pickle data"""
+    return st.session_state.subparameter_explanations.get(sub_param, "")
 
 total_main_weight = 0
 updated_weights = {}
@@ -90,7 +118,7 @@ for param_name, param_data in st.session_state.hierarchical_weights.items():
         total_sub_weight = 0
         
         for sub_param, sub_weight in param_data['sub_params'].items():
-            col1, col2 = st.columns([3, 1])
+            col1, col2, col3 = st.columns([3, 1, 0.3])
             with col1:
                 st.markdown(f"{sub_param}")
             with col2:
@@ -105,6 +133,13 @@ for param_name, param_data in st.session_state.hierarchical_weights.items():
                 )
                 sub_weights[sub_param] = weight
                 total_sub_weight += weight
+            with col3:
+                # Add explanation popover for each subparameter
+                explanation = get_subparameter_explanation(sub_param)
+                if explanation:
+                    with st.popover("ℹ️", help="Click for explanation"):
+                        st.markdown(f"**{sub_param}**")
+                        st.markdown(explanation)
         
         # Show sub-parameter total
         if abs(total_sub_weight - 100.0) > 0.1:
